@@ -1,0 +1,175 @@
+{
+  "martingale": {
+    "H=0.07": {
+      "E[S_T] at T=2": 1.0021545164293029,
+      "stderr": 0.0009365845867382847,
+      "max |z-score| of E[S_t] - S_0 over the path": 2.4864144463403868,
+      "E[v_T] / xi0 at T=2": 1.0500029317906745,
+      "stderr of E[v_T] / xi0": 0.036801061909471904
+    },
+    "H=0.25": {
+      "E[S_T] at T=2": 1.0008555345294132,
+      "stderr": 0.0006937058410811062,
+      "max |z-score| of E[S_t] - S_0 over the path": 1.8964322999256784,
+      "E[v_T] / xi0 at T=2": 0.9981061009173795,
+      "stderr of E[v_T] / xi0": 0.033249966271858646
+    },
+    "H=0.5": {
+      "E[S_T] at T=2": 1.0005168918236844,
+      "stderr": 0.0005661956626231811,
+      "max |z-score| of E[S_t] - S_0 over the path": 1.7285090790054687,
+      "E[v_T] / xi0 at T=2": 0.9902027222283197,
+      "stderr of E[v_T] / xi0": 0.07048176979899465
+    }
+  },
+  "literature_prices": [
+    {
+      "set": "Set 1",
+      "strike": 1.0,
+      "reference": 0.0791,
+      "this code": 0.079,
+      "stderr": 9.5e-05,
+      "difference in stderr": -1.03
+    },
+    {
+      "set": "Set 2",
+      "strike": 1.0,
+      "reference": 0.1246,
+      "this code": 0.12468,
+      "stderr": 0.000113,
+      "difference in stderr": 0.7
+    },
+    {
+      "set": "Set 3",
+      "strike": 0.8,
+      "reference": 0.2412,
+      "this code": 0.24122,
+      "stderr": 8.5e-05,
+      "difference in stderr": 0.2
+    },
+    {
+      "set": "Set 4",
+      "strike": 1.2,
+      "reference": 0.057,
+      "this code": 0.05711,
+      "stderr": 9.7e-05,
+      "difference in stderr": 1.15
+    }
+  ],
+  "skew_term_structure": {
+    "H=0.1": {
+      "fitted power-law exponent": -0.404,
+      "theoretical exponent H - 1/2": -0.4,
+      "simulated skew at shortest maturity": -0.742,
+      "asymptotic skew at shortest maturity": -0.7797
+    },
+    "H=0.3": {
+      "fitted power-law exponent": -0.205,
+      "theoretical exponent H - 1/2": -0.2,
+      "simulated skew at shortest maturity": -0.4005,
+      "asymptotic skew at shortest maturity": -0.4117
+    },
+    "H=0.5": {
+      "fitted power-law exponent": -0.004,
+      "theoretical exponent H - 1/2": 0.0,
+      "simulated skew at shortest maturity": -0.1702,
+      "asymptotic skew at shortest maturity": -0.175
+    }
+  },
+  "convergence_in_paths": {
+    "reference price": 0.07878248522489176,
+    "reference stderr": 4.97839432724196e-05,
+    "fitted convergence rate (theory: -0.5)": {
+      "standard": -0.486,
+      "mixed": -0.486,
+      "mixed + control variate": -0.48
+    },
+    "variance reduction, standard -> mixed + control variate": 3.5,
+    "rmse": {
+      "standard": {
+        "256": 0.005619244739386523,
+        "512": 0.00441200673238309,
+        "1024": 0.0029254721361465764,
+        "2048": 0.002693643952700833,
+        "4096": 0.001322040432524988,
+        "8192": 0.0010061102482035662,
+        "16384": 0.0007669206355658202,
+        "32768": 0.0006010925033890425
+      },
+      "mixed": {
+        "256": 0.004765460761204484,
+        "512": 0.004224648854462702,
+        "1024": 0.0024088909434127636,
+        "2048": 0.0022438379552600345,
+        "4096": 0.0009912797469351774,
+        "8192": 0.000996761929956489,
+        "16384": 0.0007969235927118259,
+        "32768": 0.00045166615720341894
+      },
+      "mixed + control variate": {
+        "256": 0.0031139441805951656,
+        "512": 0.0023511905782394177,
+        "1024": 0.0014679420562553921,
+        "2048": 0.0012647797386770476,
+        "4096": 0.0006624445395131107,
+        "8192": 0.000649976087631407,
+        "16384": 0.0004921118188673054,
+        "32768": 0.0002736372321362141
+      }
+    }
+  },
+  "convergence_in_steps": {
+    "T=0.1": {
+      "steps per year": [
+        50,
+        100,
+        200,
+        400,
+        800,
+        1600
+      ],
+      "ATM implied vol (%)": [
+        20.837,
+        20.82,
+        20.909,
+        20.924,
+        21.02,
+        21.037
+      ],
+      "stderr (vol pts)": [
+        0.034,
+        0.031,
+        0.029,
+        0.027,
+        0.026,
+        0.026
+      ]
+    },
+    "T=1.0": {
+      "steps per year": [
+        50,
+        100,
+        200,
+        400,
+        800,
+        1600
+      ],
+      "ATM implied vol (%)": [
+        19.734,
+        19.776,
+        19.808,
+        19.811,
+        19.852,
+        19.84
+      ],
+      "stderr (vol pts)": [
+        0.026,
+        0.025,
+        0.024,
+        0.024,
+        0.024,
+        0.023
+      ]
+    }
+  }
+}

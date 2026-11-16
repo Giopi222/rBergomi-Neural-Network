@@ -1,0 +1,301 @@
+{
+  "A_network_targets": {
+    "n_surfaces": 1433,
+    "median_fit_rmse_vol_points": 0.0,
+    "fraction_with_a_parameter_at_bound": 0.0,
+    "mean_surface_evaluations": 9.3,
+    "H": {
+      "median_abs_error": 2.79e-09,
+      "p95_abs_error": 1.08e-06,
+      "median_error_pct_of_range": 0.0,
+      "p95_error_pct_of_range": 0.0
+    },
+    "eta": {
+      "median_abs_error": 1.43e-08,
+      "p95_abs_error": 2.81e-06,
+      "median_error_pct_of_range": 0.0,
+      "p95_error_pct_of_range": 0.0
+    },
+    "rho": {
+      "median_abs_error": 3.3e-09,
+      "p95_abs_error": 1.14e-06,
+      "median_error_pct_of_range": 0.0,
+      "p95_error_pct_of_range": 0.0
+    },
+    "xi0": {
+      "median_abs_error": 1.5e-10,
+      "p95_abs_error": 4.34e-08,
+      "median_error_pct_of_range": 0.0,
+      "p95_error_pct_of_range": 0.0
+    }
+  },
+  "B_monte_carlo_targets": {
+    "n_surfaces": 1433,
+    "median_fit_rmse_vol_points": 0.0339,
+    "fraction_with_a_parameter_at_bound": 0.0328,
+    "mean_surface_evaluations": 9.5,
+    "H": {
+      "median_abs_error": 0.00252,
+      "p95_abs_error": 0.00799,
+      "median_error_pct_of_range": 0.721,
+      "p95_error_pct_of_range": 2.282
+    },
+    "eta": {
+      "median_abs_error": 0.0122,
+      "p95_abs_error": 0.0461,
+      "median_error_pct_of_range": 0.611,
+      "p95_error_pct_of_range": 2.304
+    },
+    "rho": {
+      "median_abs_error": 0.00434,
+      "p95_abs_error": 0.0229,
+      "median_error_pct_of_range": 0.62,
+      "p95_error_pct_of_range": 3.266
+    },
+    "xi0": {
+      "median_abs_error": 0.000255,
+      "p95_abs_error": 0.00127,
+      "median_error_pct_of_range": 0.255,
+      "p95_error_pct_of_range": 1.273
+    }
+  },
+  "C_noisy_targets": {
+    "0.0": {
+      "n_surfaces": 300,
+      "median_fit_rmse_vol_points": 0.0345,
+      "fraction_with_a_parameter_at_bound": 0.0233,
+      "mean_surface_evaluations": 9.4,
+      "H": {
+        "median_abs_error": 0.00256,
+        "p95_abs_error": 0.0076,
+        "median_error_pct_of_range": 0.731,
+        "p95_error_pct_of_range": 2.17
+      },
+      "eta": {
+        "median_abs_error": 0.0122,
+        "p95_abs_error": 0.0449,
+        "median_error_pct_of_range": 0.611,
+        "p95_error_pct_of_range": 2.244
+      },
+      "rho": {
+        "median_abs_error": 0.00429,
+        "p95_abs_error": 0.0251,
+        "median_error_pct_of_range": 0.613,
+        "p95_error_pct_of_range": 3.584
+      },
+      "xi0": {
+        "median_abs_error": 0.000242,
+        "p95_abs_error": 0.00134,
+        "median_error_pct_of_range": 0.242,
+        "p95_error_pct_of_range": 1.337
+      }
+    },
+    "0.1": {
+      "n_surfaces": 300,
+      "median_fit_rmse_vol_points": 0.1054,
+      "fraction_with_a_parameter_at_bound": 0.0267,
+      "mean_surface_evaluations": 9.5,
+      "H": {
+        "median_abs_error": 0.00363,
+        "p95_abs_error": 0.0111,
+        "median_error_pct_of_range": 1.036,
+        "p95_error_pct_of_range": 3.165
+      },
+      "eta": {
+        "median_abs_error": 0.0149,
+        "p95_abs_error": 0.0602,
+        "median_error_pct_of_range": 0.747,
+        "p95_error_pct_of_range": 3.011
+      },
+      "rho": {
+        "median_abs_error": 0.00552,
+        "p95_abs_error": 0.0285,
+        "median_error_pct_of_range": 0.788,
+        "p95_error_pct_of_range": 4.072
+      },
+      "xi0": {
+        "median_abs_error": 0.00024,
+        "p95_abs_error": 0.00149,
+        "median_error_pct_of_range": 0.24,
+        "p95_error_pct_of_range": 1.491
+      }
+    },
+    "0.25": {
+      "n_surfaces": 300,
+      "median_fit_rmse_vol_points": 0.2441,
+      "fraction_with_a_parameter_at_bound": 0.05,
+      "mean_surface_evaluations": 9.7,
+      "H": {
+        "median_abs_error": 0.00593,
+        "p95_abs_error": 0.0208,
+        "median_error_pct_of_range": 1.696,
+        "p95_error_pct_of_range": 5.953
+      },
+      "eta": {
+        "median_abs_error": 0.0262,
+        "p95_abs_error": 0.101,
+        "median_error_pct_of_range": 1.31,
+        "p95_error_pct_of_range": 5.049
+      },
+      "rho": {
+        "median_abs_error": 0.00819,
+        "p95_abs_error": 0.0306,
+        "median_error_pct_of_range": 1.17,
+        "p95_error_pct_of_range": 4.378
+      },
+      "xi0": {
+        "median_abs_error": 0.000372,
+        "p95_abs_error": 0.00199,
+        "median_error_pct_of_range": 0.372,
+        "p95_error_pct_of_range": 1.994
+      }
+    },
+    "0.5": {
+      "n_surfaces": 300,
+      "median_fit_rmse_vol_points": 0.4909,
+      "fraction_with_a_parameter_at_bound": 0.1167,
+      "mean_surface_evaluations": 9.9,
+      "H": {
+        "median_abs_error": 0.0115,
+        "p95_abs_error": 0.0422,
+        "median_error_pct_of_range": 3.283,
+        "p95_error_pct_of_range": 12.045
+      },
+      "eta": {
+        "median_abs_error": 0.0429,
+        "p95_abs_error": 0.167,
+        "median_error_pct_of_range": 2.145,
+        "p95_error_pct_of_range": 8.352
+      },
+      "rho": {
+        "median_abs_error": 0.0148,
+        "p95_abs_error": 0.0536,
+        "median_error_pct_of_range": 2.108,
+        "p95_error_pct_of_range": 7.652
+      },
+      "xi0": {
+        "median_abs_error": 0.000624,
+        "p95_abs_error": 0.00273,
+        "median_error_pct_of_range": 0.624,
+        "p95_error_pct_of_range": 2.73
+      }
+    },
+    "1.0": {
+      "n_surfaces": 300,
+      "median_fit_rmse_vol_points": 0.981,
+      "fraction_with_a_parameter_at_bound": 0.2,
+      "mean_surface_evaluations": 10.3,
+      "H": {
+        "median_abs_error": 0.0195,
+        "p95_abs_error": 0.0732,
+        "median_error_pct_of_range": 5.579,
+        "p95_error_pct_of_range": 20.913
+      },
+      "eta": {
+        "median_abs_error": 0.085,
+        "p95_abs_error": 0.328,
+        "median_error_pct_of_range": 4.248,
+        "p95_error_pct_of_range": 16.406
+      },
+      "rho": {
+        "median_abs_error": 0.0276,
+        "p95_abs_error": 0.105,
+        "median_error_pct_of_range": 3.936,
+        "p95_error_pct_of_range": 14.969
+      },
+      "xi0": {
+        "median_abs_error": 0.00121,
+        "p95_abs_error": 0.00667,
+        "median_error_pct_of_range": 1.205,
+        "p95_error_pct_of_range": 6.668
+      }
+    }
+  },
+  "D_gap_targets": {
+    "n_surfaces": 2342,
+    "median_fit_rmse_vol_points": 0.0325,
+    "fraction_with_a_parameter_at_bound": 0.0188,
+    "mean_surface_evaluations": 9.0,
+    "H": {
+      "median_abs_error": 0.00212,
+      "p95_abs_error": 0.00676,
+      "median_error_pct_of_range": 0.606,
+      "p95_error_pct_of_range": 1.93
+    },
+    "eta": {
+      "median_abs_error": 0.0108,
+      "p95_abs_error": 0.0429,
+      "median_error_pct_of_range": 0.54,
+      "p95_error_pct_of_range": 2.145
+    },
+    "rho": {
+      "median_abs_error": 0.00361,
+      "p95_abs_error": 0.0187,
+      "median_error_pct_of_range": 0.515,
+      "p95_error_pct_of_range": 2.678
+    },
+    "xi0": {
+      "median_abs_error": 0.000238,
+      "p95_abs_error": 0.0012,
+      "median_error_pct_of_range": 0.238,
+      "p95_error_pct_of_range": 1.203
+    }
+  },
+  "D_out_of_domain_targets": {
+    "n_surfaces": 1727,
+    "median_fit_rmse_vol_points": 0.6759,
+    "fraction_with_a_parameter_at_bound": 0.9931,
+    "mean_surface_evaluations": 12.7,
+    "H": {
+      "median_abs_error": 0.0571,
+      "p95_abs_error": 0.309,
+      "median_error_pct_of_range": 16.302,
+      "p95_error_pct_of_range": 88.326
+    },
+    "eta": {
+      "median_abs_error": 0.402,
+      "p95_abs_error": 1.17,
+      "median_error_pct_of_range": 20.077,
+      "p95_error_pct_of_range": 58.348
+    },
+    "rho": {
+      "median_abs_error": 0.0788,
+      "p95_abs_error": 0.322,
+      "median_error_pct_of_range": 11.254,
+      "p95_error_pct_of_range": 45.93
+    },
+    "xi0": {
+      "median_abs_error": 0.0125,
+      "p95_abs_error": 0.0721,
+      "median_error_pct_of_range": 12.485,
+      "p95_error_pct_of_range": 72.076
+    }
+  },
+  "E_timing": {
+    "network_milliseconds_per_calibration": 15.26,
+    "monte_carlo_calibration": {
+      "seconds": 35.5,
+      "surfaces_simulated": 60,
+      "true_theta": [
+        0.06778715793043376,
+        2.586369013413787,
+        -0.8040351111441851,
+        0.034501446858048436
+      ],
+      "calibrated_theta": [
+        0.061183,
+        2.6063,
+        -0.8307,
+        0.034204
+      ],
+      "fit_rmse_vol_points": 0.0877
+    },
+    "network_calibrated_theta_same_surface": [
+      0.063252,
+      2.622,
+      -0.84294,
+      0.034893
+    ],
+    "speedup": 2327
+  }
+}

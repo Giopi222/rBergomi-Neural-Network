@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project artefacts
+# The dataset is large and fully reproducible (scripts/02_generate_dataset.py).
+data/*
+!data/.gitkeep

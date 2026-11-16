@@ -1,0 +1,27 @@
+{
+  "config": {
+    "hidden_sizes": [
+      64,
+      64,
+      64,
+      64
+    ],
+    "learning_rate": 0.001,
+    "batch_size": 64,
+    "max_epochs": 600,
+    "lr_decay_factor": 0.5,
+    "lr_decay_patience": 15,
+    "early_stopping_patience": 50,
+    "seed": 0
+  },
+  "n_weights": 18000,
+  "n_train": 11233,
+  "n_val": 1376,
+  "training_seconds": 191.7,
+  "best_epoch": {
+    "epoch": 307,
+    "train_rmse": 0.07576193623654454,
+    "val_rmse": 0.07642087286875612
+  },
+  "epochs_run": 357
+}
