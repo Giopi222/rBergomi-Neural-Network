@@ -9,16 +9,16 @@ this repository. Formulas use the conventions of the code.
 
 Two empirical facts motivate the model:
 
-* **Realised volatility is rough.** Log-volatility behaves like a fractional
-  Brownian motion with Hurst exponent `H ≈ 0.1` (Gatheral, Jaisson, Rosenbaum
-  2018), far rougher than the `H = 1/2` of a diffusion.
-* **The at-the-money skew explodes at short maturities.** On SPX the skew
-  `ψ(T) = |∂_k σ_BS(k = 0, T)|` follows a power law `T^(-0.4)`, roughly.
-  Classical stochastic volatility models give a skew that is flat as `T → 0`;
+* **Realised volatility is "rough":** log-volatility behaves like a fractional
+  Brownian motion with Hurst exponent $H ≈ 0.1$ (Gatheral, Jaisson, Rosenbaum
+  2018), far rougher than the $H = 1/2$ of a diffusion.
+* **The ATM skew explodes at short maturities:** on SPX the skew
+  $\psi(T) = |\delta_k \sigma_B S(k = 0, T)|$ follows a power law $T^{-0.4}$, roughly.
+  Classical stochastic volatility models give a skew that is flat as $T → 0$;
   they can only fit the short end by adding jumps or many factors.
 
-A model driven by a fractional kernel with exponent `H − 1/2` produces a skew
-of order `T^(H − 1/2)`: one parameter explains both facts.
+A model driven by a fractional kernel with exponent $H − 1/2$ produces a skew
+of order $T^(H − 1/2)$: one parameter explains both facts.
 
 ### The model
 
@@ -47,11 +47,13 @@ Friz and Gatheral fit SPX smiles with just three numbers, typically
 ### Why it is expensive
 
 `Y` is not a semimartingale and not Markovian: `v_t` depends on the whole past
-of `W`. There is no PDE, no characteristic function, no closed formula. Prices
+of `W`. There is no PDE, no characteristic function, no closed formula! Prices
 come from Monte Carlo, and a calibration needs hundreds of them. This is the
-bottleneck the neural network removes.
+bottleneck the neural network removes, but can it be fully trusted?
 
 ### Simulation: the hybrid scheme (Bennedsen, Lunde, Pakkanen 2017)
+
+[*DISCLAIMER: the Monte Carlo simulations section has been completely managed by Claude Code Fable 5.2*]
 
 A plain Riemann sum for `Y` fails because the kernel `(t − s)^(H − 1/2)` blows
 up at `s = t`. The hybrid scheme splits the integral on a grid of step `Δ`:
