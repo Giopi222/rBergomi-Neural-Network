@@ -11,12 +11,10 @@ trusted?** The network is evaluated separately on parameters like those it was
 trained on, on a hole deliberately cut out of the training data, and on
 parameters outside the training range.
 
-For an in-depth analysis of the underlying mechanism, see the [theory notebook](docs/theory.ipynb).  
+For an in-depth analysis of the underlying mechanism, especially the Bergomi model itself, see the [theory notebook](docs/theory.ipynb).  
 
 
 ## Steps
-
-0. **The Rough Bergomi Model.** 
 
 1. **Generate the data.** There is no closed-form solution, so option prices are
    simulated with Monte Carlo and inverted to implied volatility with
@@ -88,28 +86,6 @@ measured against Monte Carlo on surfaces never used for training.
 
 ![Smiles: network against Monte Carlo](reports/figures/example_smiles.png)
 
-## The model
-
-Under rough Bergomi (Bayer, Friz, Gatheral 2016), with zero rates:
-
-```
-dS_t / S_t = sqrt(v_t) dZ_t
-v_t        = ξ0 · exp( η · sqrt(2H) · Y_t − η²/2 · t^(2H) )
-Y_t        = ∫_0^t (t − s)^(H − 1/2) dW_s,        d⟨W, Z⟩_t = ρ dt
-```
-
-| Parameter | Meaning | Training range | Out-of-domain range |
-|---|---|---|---|
-| `H` | roughness (Hurst exponent) | 0.05 – 0.40 | 0.02 – 0.50 |
-| `η` | volatility of variance | 1.0 – 3.0 | 0.5 – 4.0 |
-| `ρ` | spot–variance correlation | −0.90 – −0.20 | −0.98 – 0.00 |
-| `ξ0` | forward variance (flat) | 0.02 – 0.12 | 0.01 – 0.20 |
-
-`H < 1/2` makes the variance path rougher than a diffusion and produces the
-power-law explosion of the short-dated skew seen in equity markets. The price
-is a non-Markovian model with no PDE and no characteristic function.
-[docs/theory.ipynb](docs/theory.ipynb) has the notes on both reference papers, with small experiments and figures.
-
 
 ## Method and results, step by step
 
@@ -145,7 +121,7 @@ A fully connected network, 4 inputs (model parameters) -> 4 hidden layers of 64 
 
 | | Time per surface | Speed-up |
 |---|---:|---:|
-| Monte Carlo (16,384 paths, 8 threads) | 0.62 s | |
+| Monte Carlo (16,384 paths, 8 threads) | 0.62 s | - |
 | Network, one surface per call | 0.15 ms | × 4,000 |
 | Network, batch of 10,000 | 1.3 µs | × 470,000 |
 
