@@ -4,16 +4,15 @@ import copy
 from dataclasses import dataclass
 
 import torch
-from torch import Tensor
 
 from rbergomi_nn.dataset import TRAIN_BOX, SurfaceDataset
 from rbergomi_nn.network import VolSurfaceMLP
 from rbergomi_nn.simulator import DTYPE
 
 
-@dataclass(frozen=True)
+@dataclass
 class TrainingConfig:
-    hidden_sizes: tuple[int, ...] = (64, 64, 64, 64)
+    hidden_sizes: tuple = (64, 64, 64, 64)
     learning_rate: float = 1e-3
     batch_size: int = 64
     max_epochs: int = 600
@@ -23,19 +22,13 @@ class TrainingConfig:
     seed: int = 0
 
 
-def rmse_vol_points(model: VolSurfaceMLP, theta: Tensor, implied_vol: Tensor) -> float:
+def rmse_vol_points(model: VolSurfaceMLP, theta, implied_vol) -> float:
     """Root mean squared error over all surfaces and grid points, in vol points (1 = 1%)."""
     with torch.no_grad():
-        error = model(theta) - implied_vol
-    return 100.0 * error.square().mean().sqrt().item()
+        return 100.0 * (model(theta) - implied_vol).square().mean().sqrt().item()
 
 
-def train_network(
-    train: SurfaceDataset,
-    val: SurfaceDataset,
-    config: TrainingConfig,
-    verbose: bool = True,
-) -> tuple[VolSurfaceMLP, list[dict]]:
+def train_network(train: SurfaceDataset, val: SurfaceDataset, config: TrainingConfig, verbose=True):
     """Fit the network on ``train`` and keep the weights with the best ``val`` error.
 
     The loss is the mean squared error on standardised implied volatilities, so
@@ -44,19 +37,13 @@ def train_network(
     Returns the trained model and the per-epoch history.
     """
     torch.manual_seed(config.seed)
-
     train_theta = torch.as_tensor(train.theta, dtype=DTYPE)
     train_vol = torch.as_tensor(train.flat_implied_vol, dtype=DTYPE)
     val_theta = torch.as_tensor(val.theta, dtype=DTYPE)
     val_vol = torch.as_tensor(val.flat_implied_vol, dtype=DTYPE)
 
-    model = VolSurfaceMLP(
-        theta_lower=torch.as_tensor(TRAIN_BOX.lower_array),
-        theta_upper=torch.as_tensor(TRAIN_BOX.upper_array),
-        output_mean=train_vol.mean(dim=0),
-        output_std=train_vol.std(dim=0),
-        hidden_sizes=config.hidden_sizes,
-    )
+    lower, upper = torch.tensor(TRAIN_BOX.lower), torch.tensor(TRAIN_BOX.upper)
+    model = VolSurfaceMLP(lower, upper, train_vol.mean(0), train_vol.std(0), config.hidden_sizes)
     train_target = model.standardise(train_vol)
 
     optimiser = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
@@ -64,17 +51,14 @@ def train_network(
         optimiser, factor=config.lr_decay_factor, patience=config.lr_decay_patience
     )
 
-    history: list[dict] = []
-    best_val_rmse = float("inf")
-    best_state = copy.deepcopy(model.state_dict())
-    epochs_since_best = 0
-
+    history, best_val_rmse, best_epoch = [], float("inf"), 0
     for epoch in range(1, config.max_epochs + 1):
         model.train()
         for batch in torch.randperm(len(train_theta)).split(config.batch_size):
-            loss = (model.forward_standardised(train_theta[batch]) - train_target[batch]).square()
+            output = model.forward_standardised(train_theta[batch])
+            loss = (output - train_target[batch]).square().mean()
             optimiser.zero_grad()
-            loss.mean().backward()
+            loss.backward()
             optimiser.step()
 
         model.eval()
@@ -84,16 +68,12 @@ def train_network(
         history.append({"epoch": epoch, "train_rmse": train_rmse, "val_rmse": val_rmse})
 
         if val_rmse < best_val_rmse:
-            best_val_rmse = val_rmse
+            best_val_rmse, best_epoch = val_rmse, epoch
             best_state = copy.deepcopy(model.state_dict())
-            epochs_since_best = 0
-        else:
-            epochs_since_best += 1
-
         if verbose and (epoch == 1 or epoch % 10 == 0):
             rate = optimiser.param_groups[0]["lr"]
             print(f"epoch {epoch:4d}  train {train_rmse:.4f}  val {val_rmse:.4f}  lr {rate:.0e}")
-        if epochs_since_best >= config.early_stopping_patience:
+        if epoch - best_epoch >= config.early_stopping_patience:
             break
 
     model.load_state_dict(best_state)

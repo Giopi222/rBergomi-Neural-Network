@@ -5,8 +5,6 @@ network outputs the whole surface on a fixed grid at once, one output neuron
 per grid point.
 """
 
-from pathlib import Path
-
 import torch
 from torch import Tensor, nn
 
@@ -17,36 +15,25 @@ class VolSurfaceMLP(nn.Module):
     """Fully connected network ``theta -> implied volatilities on the grid``.
 
     The input and output scalings are stored inside the module, so the network
-    consumes raw parameters and returns volatilities in natural units, and a
-    saved checkpoint is self-contained.
+    takes raw parameters, returns volatilities, and a checkpoint is self-contained.
 
-    The activation is SiLU, which is infinitely differentiable: calibration
-    uses the Jacobian of the network, and a smooth activation gives a smooth
-    Jacobian (ReLU would make it piecewise constant).
+    SiLU rather than ReLU because calibration uses the Jacobian of the network,
+    and SiLU makes it smooth (with ReLU it would be piecewise constant).
     """
 
-    def __init__(
-        self,
-        theta_lower: Tensor,
-        theta_upper: Tensor,
-        output_mean: Tensor,
-        output_std: Tensor,
-        hidden_sizes: tuple[int, ...] = (64, 64, 64, 64),
-    ):
+    def __init__(self, theta_lower, theta_upper, output_mean, output_std, hidden_sizes):
         super().__init__()
-        self.hidden_sizes = tuple(hidden_sizes)
-        self.register_buffer("theta_lower", theta_lower.to(DTYPE))
-        self.register_buffer("theta_upper", theta_upper.to(DTYPE))
-        self.register_buffer("output_mean", output_mean.to(DTYPE))
-        self.register_buffer("output_std", output_std.to(DTYPE))
+        self.hidden_sizes = hidden_sizes
+        self.register_buffer("theta_lower", theta_lower)
+        self.register_buffer("theta_upper", theta_upper)
+        self.register_buffer("output_mean", output_mean)
+        self.register_buffer("output_std", output_std)
 
-        layers: list[nn.Module] = []
-        width = len(theta_lower)
-        for hidden in self.hidden_sizes:
+        layers, width = [], len(theta_lower)
+        for hidden in hidden_sizes:
             layers += [nn.Linear(width, hidden), nn.SiLU()]
             width = hidden
-        layers.append(nn.Linear(width, len(output_mean)))
-        self.layers = nn.Sequential(*layers).to(DTYPE)
+        self.layers = nn.Sequential(*layers, nn.Linear(width, len(output_mean))).to(DTYPE)
 
     def forward_standardised(self, theta: Tensor) -> Tensor:
         """Network output in standardised units (the space the loss lives in)."""
@@ -62,44 +49,31 @@ class VolSurfaceMLP(nn.Module):
 
     @torch.no_grad()
     def jacobian(self, theta: Tensor) -> Tensor:
-        """Derivative of the surface with respect to one parameter vector.
+        """Derivative of the surface at one parameter vector: ``(4,) -> (n_outputs, 4)``.
 
-        ``theta`` has shape ``(4,)``; the result has shape ``(n_outputs, 4)``.
-
-        The chain rule is applied layer by layer alongside the forward pass. This
-        gives the same numbers as automatic differentiation at a fraction of the
-        cost, which matters because calibration calls it at every iteration.
+        The chain rule is applied layer by layer alongside the forward pass: same
+        numbers as autograd at a fraction of the cost, which matters because
+        calibration calls it at every iteration.
         """
-        input_scale = 2.0 / (self.theta_upper - self.theta_lower)
-        activation = input_scale * (theta - self.theta_lower) - 1.0
-        jacobian = torch.diag(input_scale)
-
+        scale = 2.0 / (self.theta_upper - self.theta_lower)
+        z = scale * (theta - self.theta_lower) - 1.0
+        jacobian = torch.diag(scale)
         for layer in self.layers:
             if isinstance(layer, nn.Linear):
-                activation = layer(activation)
-                jacobian = layer.weight @ jacobian
-            else:
-                # SiLU: f(z) = z * s(z) with s the sigmoid, so f'(z) = s * (1 + z * (1 - s)).
-                sigmoid = torch.sigmoid(activation)
-                derivative = sigmoid * (1.0 + activation * (1.0 - sigmoid))
-                activation = activation * sigmoid
-                jacobian = derivative[:, None] * jacobian
+                z, jacobian = layer(z), layer.weight @ jacobian
+            else:  # SiLU: f(z) = z * s(z), s = sigmoid, so f'(z) = s * (1 + z * (1 - s))
+                s = torch.sigmoid(z)
+                z, jacobian = z * s, (s * (1.0 + z * (1.0 - s)))[:, None] * jacobian
         return self.output_std[:, None] * jacobian
 
-    def save(self, path: Path) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
+    def save(self, path):
         torch.save({"hidden_sizes": self.hidden_sizes, "state_dict": self.state_dict()}, path)
 
     @classmethod
-    def load(cls, path: Path) -> "VolSurfaceMLP":
+    def load(cls, path) -> "VolSurfaceMLP":
         checkpoint = torch.load(path, weights_only=True)
         state = checkpoint["state_dict"]
-        model = cls(
-            state["theta_lower"],
-            state["theta_upper"],
-            state["output_mean"],
-            state["output_std"],
-            hidden_sizes=tuple(checkpoint["hidden_sizes"]),
-        )
+        names = ("theta_lower", "theta_upper", "output_mean", "output_std")
+        model = cls(*(state[name] for name in names), checkpoint["hidden_sizes"])
         model.load_state_dict(state)
         return model.eval()

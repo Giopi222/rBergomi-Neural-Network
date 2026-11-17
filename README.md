@@ -11,22 +11,55 @@ trusted?** The network is evaluated separately on parameters like those it was
 trained on, on a hole deliberately cut out of the training data, and on
 parameters outside the training range.
 
+For an in-depth analysis of the underlying mechanism, see the [theory notebook](docs/theory.ipynb).  
+
+
+## Steps
+
+0. **The Rough Bergomi Model.** 
+
+1. **Generate the data.** There is no closed-form solution, so option prices are
+   simulated with Monte Carlo and inverted to implied volatility with
+   Black–Scholes. Each price is noisy, and the noise is recorded. The simulator
+   is validated first ([details](docs/simulator.md)).
+2. **Train the network.** It learns the map from parameters to a vol
+   surface on the synthetic dataset:
+   $$f(H, \, \eta, \, \rho, \, \xi_0) \rightarrow IV(K,T)$$
+3. **Calibrate.** Calibration is the most expensive part of the workflow, since
+   it needs many prices; the network is what cuts this cost. A surface is
+   generated with known parameters and the network is asked to recover them by
+   minimising $\sum (IV_{mkt} - IV_{model})^2$.
+4. **Test where it can be trusted.** Three kinds of test surfaces are used:
+   *in-domain*, *interpolation gap* ($H$ between 0.20 and 0.25, deliberately
+   removed from training) and *out-of-domain*.
+
+In short: the network is very fast and interpolates well, but extrapolates
+poorly. Its error (0.076 vol points) is almost the same as the Monte Carlo
+noise (0.074). Noise on the target prices makes the recovered parameters worse,
+$H$ most of all. Outside the domain calibration fails, which is expected, but it
+fails visibly and is therefore easy to monitor. Synthetic data is a limitation,
+but it is what allows measuring how well the true parameters are recovered; the
+exercise could later be repeated on market data.
+
+> **Disclaimer:** The Monte Carlo section was developed entirely by Claude Code (Fable 5.2).
+
+
 ## Findings
 
 All errors are in volatility points (1 vol point = 1% of implied volatility),
 measured against Monte Carlo on surfaces never used for training.
 
-| | Surfaces | Network RMSE | Worst grid point | Monte Carlo noise |
+| | surfaces | Network RMSE | Worst grid point | Monte Carlo noise |
 |---|---:|---:|---:|---:|
 | **In-domain** test | 1,433 | 0.076 | 0.67 | 0.074 |
-| **Interpolation gap** (`H ∈ [0.20, 0.25]` removed from training) | 2,342 | 0.071 | 0.61 | 0.068 |
+| **Interpolation gap** (removed from training) | 2,342 | 0.071 | 0.61 | 0.068 |
 | **Out-of-domain** (outside the training box) | 1,727 | 0.281 | 3.71 | 0.098 |
 
-1. **Inside the training domain the network is as accurate as the data it
-   learned from.** Its error against Monte Carlo (0.076) is almost entirely the
+1. **Inside the training domain the network is as accurate as the data it learned from.** 
+   Its error against Monte Carlo (0.076) is almost entirely the
    Monte Carlo noise of the comparison surfaces (0.074). Removing that noise in
    quadrature leaves roughly 0.02 vol points of genuine approximation error.
-   Training and test errors coincide: no overfitting.
+   Training and test errors coincide, which means that there is no overfitting.
 2. **A hole in the training data does no harm.** The network never saw a Hurst
    exponent between 0.20 and 0.25, yet its error there is the same as elsewhere.
    The pricing map is smooth, and interpolating across a gap surrounded by data
@@ -75,77 +108,40 @@ Y_t        = ∫_0^t (t − s)^(H − 1/2) dW_s,        d⟨W, Z⟩_t = ρ dt
 `H < 1/2` makes the variance path rougher than a diffusion and produces the
 power-law explosion of the short-dated skew seen in equity markets. The price
 is a non-Markovian model with no PDE and no characteristic function.
-[docs/theory.md](docs/theory.md) has the notes on both reference papers.
+[docs/theory.ipynb](docs/theory.ipynb) has the notes on both reference papers, with small experiments and figures.
+
 
 ## Method and results, step by step
 
-### 1. Simulator
+### 1. Data
 
-The Volterra process `Y` is simulated with the hybrid scheme of Bennedsen,
-Lunde and Pakkanen (2017), written in PyTorch and differentiable in all four
-parameters. Prices use a conditional ("mixed") Monte Carlo estimator that
-integrates the independent Brownian motion analytically, plus antithetic paths
-and a control variate. Code: [simulator.py](src/rbergomi_nn/simulator.py),
-[pricing.py](src/rbergomi_nn/pricing.py).
+The simulator (hybrid scheme, PyTorch, differentiable in all four parameters) and its validation against published prices are described in [docs/simulator.md](docs/simulator.md).
 
-### 2. Validation
+**Implied volatility surface.** Prices are inverted with a vectorised bisection
+on an 8 × 10 grid: maturities from 0.1 to 2 years, and strikes at
+`log(K/S0) = m · sqrt(T)` with `m ∈ [−0.30, 0.15]`. Scaling strikes with
+`sqrt(T)` keeps every grid point within a few standard deviations of the money
+at every maturity, where Monte Carlo implied volatilities are reliable. All
+18,111 surfaces inverted without a single undefined value.
 
-No closed formula exists, so the simulator is checked from several independent
-directions ([01_validate_simulator.py](scripts/01_validate_simulator.py)):
-
-| Check | Result |
-|---|---|
-| Martingale `E[S_t] = S_0`, for `H` = 0.07, 0.25, 0.5 | within 2.5 standard errors at all 400 time steps |
-| `H = 1/2` | the scheme reproduces Brownian motion path by path (to 1e-12) |
-| `η = 0` | Black–Scholes prices recovered exactly |
-| Published prices (Bayer, Ben Hammouda, Tempone 2020, Table 5.1) | all four within 1.2 standard errors, see below |
-| Short-maturity skew `∝ T^(H − 1/2)` | fitted exponents −0.404, −0.205, −0.004 against −0.4, −0.2, 0 |
-| Convergence in paths | error `∝ N^(−0.48)`, theory `N^(−1/2)` |
-
-| Reference set | Strike | Published | This code | Std. error |
-|---|---:|---:|---:|---:|
-| `H=0.07, η=1.9, ρ=−0.9, ξ0=0.235²` | 1.0 | 0.0791 | 0.07900 | 0.00010 |
-| `H=0.02, η=0.4, ρ=−0.7, ξ0=0.1` | 1.0 | 0.1246 | 0.12468 | 0.00011 |
-| same | 0.8 | 0.2412 | 0.24122 | 0.00009 |
-| same | 1.2 | 0.0570 | 0.05711 | 0.00010 |
-
-![At-the-money skew term structure](reports/figures/validation_skew.png)
-
-The mixed estimator with control variate cuts the variance of an at-the-money
-price by a factor of about 3.5 at `ρ = −0.9`. That is a modest gain; its main
-benefit is that prices are smooth and strictly positive in the strike, so the
-implied volatility always exists.
-
-### 3. Implied volatility surface
-
-Prices are inverted with a vectorised bisection on an 8 × 10 grid: maturities
-from 0.1 to 2 years, and strikes at `log(K/S0) = m · sqrt(T)` with
-`m ∈ [−0.30, 0.15]`. Scaling strikes with `sqrt(T)` keeps every grid point
-within a few standard deviations of the money at every maturity, where Monte
-Carlo implied volatilities are reliable. All 18,111 surfaces inverted without
-a single undefined value.
-
-### 4. Dataset
-
-18,111 parameter vectors from scrambled Sobol sequences, each simulated with
-16,384 paths and 200 time steps per year
+**Dataset.** 18,111 parameter vectors from scrambled Sobol sequences, each
+simulated with 16,384 paths and 200 time steps per year
 ([dataset.py](src/rbergomi_nn/dataset.py)). The Monte Carlo standard error of
 every implied volatility is stored next to it.
+
+[Explore the dataset](docs/dataset_explorer.ipynb)
 
 | Split | Surfaces | Region |
 |---|---:|---|
 | train | 11,233 | training box |
 | val | 1,376 | training box (early stopping) |
-| test | 1,433 | training box |
-| gap | 2,342 | training box, `H ∈ [0.20, 0.25]`: never trained on |
-| ood | 1,727 | outside the training box |
+| **test** | 1,433 | training box |
+| **gap** | 2,342 | training box, excluding $H \in [0.20, 0.25]$ |
+| **ood** | 1,727 | outside the training box |
 
-### 5. Network
+### 2. Network
 
-A fully connected network, 4 inputs → 4 hidden layers of 64 units (SiLU) → 80
-implied volatilities; 18,000 weights. Inputs are scaled to `[−1, 1]`, outputs
-standardised. Adam with learning-rate decay and early stopping; three minutes
-on a laptop CPU.
+A fully connected network, 4 inputs (model parameters) -> 4 hidden layers of 64 units (SiLU, tanh is also a good choice to be infinitely differentiable) -> 80 implied volatilities; 18,000 weights. Inputs theta are scaled to [−1, 1], outputs standardised. Adam with learning-rate decay and early stopping. Tot. training time: 3 minutes on a laptop CPU.
 
 | | Time per surface | Speed-up |
 |---|---:|---:|
@@ -159,12 +155,14 @@ The network's error has the same shape as the Monte Carlo noise: largest for
 short-dated, low-strike options. This is the signature of a network limited by
 its labels rather than by its capacity.
 
-### 6. Calibration
+### 3. Calibration
 
 A bounded Levenberg–Marquardt optimiser fits the four parameters to a target
 surface, using the network and its exact Jacobian
 ([calibration.py](src/rbergomi_nn/calibration.py)). The true parameters are
-always known.
+always known (which is the only advantage of using synthetic data).
+
+Gaussian noise (standard deviation of 0.1, 0.25, 0.5 and 1 vol points) is added to simulate market quote imperfections such as bid-ask spreads, estimation errors and rounding.
 
 | Target surfaces | Median error, % of training range (`H`, `η`, `ρ`, `ξ0`) | Stopped on a bound |
 |---|---|---:|
@@ -245,18 +243,18 @@ src/rbergomi_nn/
     training.py        training loop with early stopping
     calibration.py     least-squares calibration for any pricer (network or Monte Carlo)
     project.py         file locations and plotting defaults
-scripts/               the six steps above, numbered in order
+scripts/               the numbered steps above
 tests/                 unit and statistical tests
-docs/theory.md         notes on the reference papers and the numerical methods
+docs/simulator.md      Monte Carlo simulator and its validation
+docs/theory.ipynb      notes on the reference papers and the numerical methods (notebook)
 reports/               figures and JSON results produced by the scripts
 models/                trained network
 ```
 
 ## Next: differential machine learning
 
-The simulator is already differentiable in `(H, η, ρ, ξ0)`. Phase 2 will train
-the network on pathwise sensitivities as well as values (Huge and Savine 2020),
-and test whether that reduces the number of simulations needed and improves the
+The simulator is already differentiable in `(H, η, ρ, ξ0)`. A future step will be about training the network on pathwise sensitivities as well as values (Huge and Savine 2020),
+and testing whether that reduces the number of simulations needed and improves the
 Jacobian that calibration depends on.
 
 ## References

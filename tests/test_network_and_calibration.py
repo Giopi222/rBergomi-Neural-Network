@@ -99,7 +99,7 @@ def test_calibration_through_the_network_recovers_parameters(trained, synthetic_
     pricer = network_pricer(model)
 
     errors = []
-    for theta, target in zip(test.theta[:20], test.flat_implied_vol[:20], strict=True):
+    for theta, target in zip(test.theta[:20], test.flat_implied_vol[:20]):
         result = calibrate(pricer, target, TRAIN_BOX)
         errors.append(np.abs(TRAIN_BOX.normalise(result.theta) - TRAIN_BOX.normalise(theta)))
     # Normalised units: 2 = the full training range, so this is a median error below 5% of

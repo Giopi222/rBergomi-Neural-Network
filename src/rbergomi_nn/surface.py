@@ -1,6 +1,5 @@
-"""From model parameters to an implied volatility surface on a fixed grid."""
+"""From model parameters to an implied volatility surface on a fixed grid (S0 = 1)."""
 
-import math
 from dataclasses import dataclass
 
 import torch
@@ -10,10 +9,8 @@ from rbergomi_nn.black_scholes import black_vega, implied_vol
 from rbergomi_nn.pricing import mixed_estimator
 from rbergomi_nn.simulator import DTYPE, RBergomiParams, simulate_variance
 
-SPOT = 1.0  # prices are homogeneous in the spot, so the surface is computed for S0 = 1
 
-
-@dataclass(frozen=True)
+@dataclass
 class SurfaceGrid:
     """Fixed grid of maturities and strikes on which surfaces are computed.
 
@@ -24,10 +21,8 @@ class SurfaceGrid:
     towards puts because that is where equity smiles carry information.
     """
 
-    maturities: tuple[float, ...] = (0.1, 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.0)
-    scaled_moneyness: tuple[float, ...] = (
-        -0.30, -0.25, -0.20, -0.15, -0.10, -0.05, 0.0, 0.05, 0.10, 0.15,
-    )  # fmt: skip
+    maturities: tuple = (0.1, 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.0)
+    scaled_moneyness: tuple = (-0.30, -0.25, -0.20, -0.15, -0.10, -0.05, 0.0, 0.05, 0.10, 0.15)
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -38,21 +33,17 @@ class SurfaceGrid:
         return len(self.maturities) * len(self.scaled_moneyness)
 
     @property
-    def maturity_tensor(self) -> Tensor:
-        return torch.tensor(self.maturities, dtype=DTYPE)
-
-    @property
     def log_moneyness(self) -> Tensor:
         """``log(K / S0)`` at each grid point, shape ``(n_maturities, n_strikes)``."""
-        scaled = torch.tensor(self.scaled_moneyness, dtype=DTYPE)
-        return torch.sqrt(self.maturity_tensor)[:, None] * scaled[None, :]
+        sqrt_t = torch.tensor(self.maturities, dtype=DTYPE).sqrt()
+        return sqrt_t[:, None] * torch.tensor(self.scaled_moneyness, dtype=DTYPE)
 
     @property
     def strikes(self) -> Tensor:
-        return SPOT * torch.exp(self.log_moneyness)
+        return torch.exp(self.log_moneyness)
 
 
-@dataclass(frozen=True)
+@dataclass
 class MonteCarloConfig:
     """Discretisation used to compute one surface."""
 
@@ -60,56 +51,32 @@ class MonteCarloConfig:
     steps_per_year: int = 200
     antithetic: bool = True
 
-    @property
-    def dt(self) -> float:
-        return 1.0 / self.steps_per_year
 
-    def n_steps(self, horizon: float) -> int:
-        return math.ceil(horizon * self.steps_per_year - 1e-9)
-
-
-@dataclass(frozen=True)
+@dataclass
 class SurfaceEstimate:
     """Monte Carlo implied volatility surface with its statistical error."""
 
     implied_vol: Tensor  # (n_maturities, n_strikes)
     implied_vol_stderr: Tensor  # (n_maturities, n_strikes), same units as implied_vol
-    price: Tensor
-    price_stderr: Tensor
 
 
 def implied_vol_surface(
-    params: RBergomiParams,
-    grid: SurfaceGrid,
-    mc: MonteCarloConfig,
-    seed: int,
+    params: RBergomiParams, grid: SurfaceGrid, mc: MonteCarloConfig, seed: int
 ) -> SurfaceEstimate:
     """Simulate rough Bergomi once and read the whole surface off the same paths.
 
     The standard error of the implied volatility is obtained from the standard
     error of the price by the delta method: ``stderr_vol = stderr_price / vega``.
     """
+    maturities, strikes = torch.tensor(grid.maturities, dtype=DTYPE), grid.strikes
+    n_steps = round(max(grid.maturities) * mc.steps_per_year)
     generator = torch.Generator().manual_seed(seed)
-    maturities = grid.maturity_tensor
-    strikes = grid.strikes
-
     paths = simulate_variance(
-        params,
-        n_steps=mc.n_steps(max(grid.maturities)),
-        dt=mc.dt,
-        n_paths=mc.n_paths,
-        generator=generator,
-        antithetic=mc.antithetic,
+        params, n_steps, 1 / mc.steps_per_year, mc.n_paths, generator, mc.antithetic
     )
-    estimate = mixed_estimator(paths, params.rho, maturities, strikes, spot=SPOT)
+    estimate = mixed_estimator(paths, params.rho, maturities, strikes)
 
-    forward = torch.tensor(SPOT, dtype=DTYPE)
-    maturity_column = maturities[:, None]
-    vol = implied_vol(estimate.price, forward, strikes, maturity_column, is_call=strikes >= SPOT)
-    vega = black_vega(forward, strikes, maturity_column, vol)
-    return SurfaceEstimate(
-        implied_vol=vol,
-        implied_vol_stderr=estimate.stderr / vega,
-        price=estimate.price,
-        price_stderr=estimate.stderr,
-    )
+    T = maturities[:, None]
+    vol = implied_vol(estimate.price, 1.0, strikes, T, is_call=strikes >= 1.0)
+    vega = black_vega(1.0, strikes, T, vol)
+    return SurfaceEstimate(vol, estimate.stderr / vega)

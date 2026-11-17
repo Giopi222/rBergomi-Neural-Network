@@ -98,7 +98,7 @@ def test_zero_vol_of_vol_gives_black_scholes_spot():
 def test_simulation_is_differentiable_in_the_parameters():
     """Gradients must flow to all parameters: required for differential ML later on."""
     theta = torch.tensor([0.1, 1.9, -0.9, 0.04], dtype=DTYPE, requires_grad=True)
-    params = RBergomiParams.from_vector(theta)
+    params = RBergomiParams(*theta)
     random = generator()
     paths = simulate_variance(params, 20, DT, 1000, random)
     spot = simulate_spot(paths, params.rho, random)

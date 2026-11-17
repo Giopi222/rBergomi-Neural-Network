@@ -13,6 +13,8 @@ Usage:
 """
 
 import math
+from dataclasses import replace
+from functools import partial
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -37,18 +39,11 @@ LITERATURE_PRICES = [
 BATCH_PATHS = 2**14  # paths simulated at once; larger runs are split in batches to bound memory
 
 
-def tensor(values) -> torch.Tensor:
+def tensor(values):
     return torch.tensor(values, dtype=DTYPE)
 
 
-def price_in_batches(
-    params: RBergomiParams,
-    maturities: list[float],
-    strikes: torch.Tensor,
-    steps_per_year: int,
-    n_batches: int,
-    seed: int,
-) -> PriceEstimate:
+def price_in_batches(params, maturities, strikes, steps_per_year, n_batches, seed):
     """Mixed-estimator prices averaged over independent batches of ``BATCH_PATHS`` paths."""
     n_steps = round(max(maturities) * steps_per_year)
     batches = []
@@ -61,7 +56,7 @@ def price_in_batches(
     return PriceEstimate(price, stderr)
 
 
-def check_martingale() -> dict:
+def check_martingale():
     """E[S_t] and E[v_t] along the path, for rough and non-rough dynamics."""
     n_steps, dt, n_paths = 400, 1 / 200, 2**16
     times = dt * np.arange(1, n_steps + 1)
@@ -69,31 +64,30 @@ def check_martingale() -> dict:
     report = {}
 
     for hurst, colour in [(0.07, "C3"), (0.25, "C0"), (0.5, "C2")]:
-        params = RBergomiParams(hurst, BFG_PARAMS.eta, BFG_PARAMS.rho, BFG_PARAMS.xi0)
+        params = replace(BFG_PARAMS, hurst=hurst)
         generator = torch.Generator().manual_seed(0)
         paths = simulate_variance(params, n_steps, dt, n_paths, generator)
         spot = simulate_spot(paths, params.rho, generator)
 
         spot_mean, spot_stderr = mean_and_stderr(spot[:, 1:], antithetic=True)
         variance_mean, variance_stderr = mean_and_stderr(paths.variance[:, 1:], antithetic=True)
+        variance_mean, variance_stderr = variance_mean / params.xi0, variance_stderr / params.xi0
         z_scores = ((spot_mean - 1.0) / spot_stderr).abs()
         report[f"H={hurst}"] = {
             "E[S_T] at T=2": spot_mean[-1].item(),
             "stderr": spot_stderr[-1].item(),
             "max |z-score| of E[S_t] - S_0 over the path": z_scores.max().item(),
-            "E[v_T] / xi0 at T=2": (variance_mean[-1] / params.xi0).item(),
-            "stderr of E[v_T] / xi0": (variance_stderr[-1] / params.xi0).item(),
+            "E[v_T] / xi0 at T=2": variance_mean[-1].item(),
+            "stderr of E[v_T] / xi0": variance_stderr[-1].item(),
         }
 
-        for axis, mean, stderr, target in [
-            (spot_axis, spot_mean, spot_stderr, 1.0),
-            (variance_axis, variance_mean / params.xi0, variance_stderr / params.xi0, 1.0),
+        for axis, mean, stderr in [
+            (spot_axis, spot_mean, spot_stderr),
+            (variance_axis, variance_mean, variance_stderr),
         ]:
             axis.plot(times, mean, color=colour, lw=1.2, label=f"H = {hurst}")
-            axis.fill_between(
-                times, target - 2 * stderr, target + 2 * stderr, color=colour, alpha=0.12
-            )
-            axis.axhline(target, color="k", lw=0.8)
+            axis.fill_between(times, 1 - 2 * stderr, 1 + 2 * stderr, color=colour, alpha=0.12)
+            axis.axhline(1.0, color="k", lw=0.8)
 
     spot_axis.set(title="Martingale check: $E[S_t]$", xlabel="t (years)", ylabel="$E[S_t] / S_0$")
     variance_axis.set(
@@ -104,7 +98,7 @@ def check_martingale() -> dict:
     return report
 
 
-def check_literature_prices() -> list[dict]:
+def check_literature_prices():
     rows = []
     for name, params, strike, reference in LITERATURE_PRICES:
         estimate = price_in_batches(params, [1.0], tensor([strike]), 500, n_batches=16, seed=100)
@@ -124,7 +118,7 @@ def check_literature_prices() -> list[dict]:
     return rows
 
 
-def atm_skew(params: RBergomiParams, maturities: list[float], steps_per_year: int) -> np.ndarray:
+def atm_skew(params, maturities, steps_per_year):
     """At-the-money skew d(implied vol)/d(log-strike) by central finite differences.
 
     Both strikes are priced on the same paths, so the difference is not swamped by noise.
@@ -132,17 +126,14 @@ def atm_skew(params: RBergomiParams, maturities: list[float], steps_per_year: in
     skews = []
     for maturity in maturities:
         half_width = 0.1 * math.sqrt(params.xi0 * maturity)
-        log_strikes = tensor([-half_width, half_width])
-        strikes = torch.exp(log_strikes)
+        strikes = torch.exp(tensor([-half_width, half_width]))
         estimate = price_in_batches(params, [maturity], strikes, steps_per_year, 4, seed=200)
-        vols = implied_vol(
-            estimate.price[0], tensor(1.0), strikes, tensor(maturity), is_call=strikes >= 1.0
-        )
+        vols = implied_vol(estimate.price[0], tensor(1.0), strikes, tensor(maturity), strikes >= 1)
         skews.append(((vols[1] - vols[0]) / (2 * half_width)).item())
     return np.array(skews)
 
 
-def check_skew_term_structure() -> dict:
+def check_skew_term_structure():
     r"""Compare the ATM skew with its small-maturity limit (Alòs-León-Vives, Fukasawa)::
 
         skew(T) ~ rho * eta * sqrt(2H) / (2 (H + 1/2) (H + 3/2)) * T^(H - 1/2)
@@ -184,7 +175,7 @@ def check_skew_term_structure() -> dict:
     return report
 
 
-def check_convergence_in_paths() -> dict:
+def check_convergence_in_paths():
     """RMSE of the at-the-money price against the number of paths, for three estimators."""
     params, maturity, steps_per_year, n_repeats = BFG_PARAMS, 1.0, 100, 40
     maturities, strikes = tensor([maturity]), tensor([1.0])
@@ -205,20 +196,19 @@ def check_convergence_in_paths() -> dict:
                 params, steps_per_year, 1 / steps_per_year, n_paths, generator
             )
             spot = simulate_spot(paths, params.rho, generator)
+            mixed = partial(mixed_estimator, paths, params.rho, maturities, strikes)
             prices = {
                 "standard": standard_estimator(spot, paths, maturities, strikes),
-                "mixed": mixed_estimator(
-                    paths, params.rho, maturities, strikes, control_variate=False
-                ),
-                "mixed + control variate": mixed_estimator(paths, params.rho, maturities, strikes),
+                "mixed": mixed(control_variate=False),
+                "mixed + control variate": mixed(),
             }
-            for name in estimators:
-                errors[name].append(prices[name].price.item() - reference_price)
+            for name, estimate in prices.items():
+                errors[name].append(estimate.price.item() - reference_price)
         for name in estimators:
             rmse[name].append(float(np.sqrt(np.mean(np.square(errors[name])))))
 
     figure, axis = plt.subplots(figsize=(6.2, 4.2))
-    for name, colour in zip(estimators, ("C7", "C0", "C3"), strict=True):
+    for name, colour in zip(estimators, ("C7", "C0", "C3")):
         axis.loglog(path_counts, rmse[name], "o-", color=colour, label=name)
     guide = rmse["standard"][0] * np.sqrt(path_counts[0] / np.array(path_counts))
     axis.loglog(path_counts, guide, "k--", lw=0.8, label=r"$\propto N^{-1/2}$")
@@ -242,15 +232,13 @@ def check_convergence_in_paths() -> dict:
         "variance reduction, standard -> mixed + control variate": round(
             float(np.exp(np.mean(np.log(variance_ratio)))), 1
         ),
-        "rmse": {
-            name: dict(zip(map(str, path_counts), rmse[name], strict=True)) for name in estimators
-        },
+        "rmse": {name: dict(zip(map(str, path_counts), rmse[name])) for name in estimators},
     }
 
 
-def check_convergence_in_steps() -> dict:
+def check_convergence_in_steps():
     """At-the-money implied volatility against the number of time steps per year."""
-    params = BFG_PARAMS
+    params, one = BFG_PARAMS, tensor(1.0)
     maturities = [0.1, 1.0]
     step_counts = [50, 100, 200, 400, 800, 1600]
     vols = {maturity: [] for maturity in maturities}
@@ -260,20 +248,13 @@ def check_convergence_in_steps() -> dict:
         estimate = price_in_batches(params, maturities, tensor([1.0]), steps_per_year, 16, seed=400)
         for row, maturity in enumerate(maturities):
             # ATM: price ~ vol * sqrt(T / 2 pi), so the vol error is the price error rescaled.
-            vol = implied_vol(
-                estimate.price[row, 0],
-                tensor(1.0),
-                tensor(1.0),
-                tensor(maturity),
-                torch.tensor(True),
-            ).item()
-            vols[maturity].append(100 * vol)
-            errors[maturity].append(
-                100 * estimate.stderr[row, 0].item() * math.sqrt(2 * math.pi / maturity)
-            )
+            price, stderr = estimate.price[row, 0], estimate.stderr[row, 0].item()
+            vol = implied_vol(price, one, one, tensor(maturity), torch.tensor(True))
+            vols[maturity].append(100 * vol.item())
+            errors[maturity].append(100 * stderr * math.sqrt(2 * math.pi / maturity))
 
     figure, axes = plt.subplots(1, 2, figsize=(11, 3.8))
-    for axis, maturity in zip(axes, maturities, strict=True):
+    for axis, maturity in zip(axes, maturities):
         axis.errorbar(
             step_counts, vols[maturity], yerr=2 * np.array(errors[maturity]), fmt="o-", capsize=3
         )
@@ -297,7 +278,7 @@ def check_convergence_in_steps() -> dict:
     }
 
 
-def main() -> None:
+def main():
     torch.set_grad_enabled(False)
     checks = {
         "martingale": check_martingale,

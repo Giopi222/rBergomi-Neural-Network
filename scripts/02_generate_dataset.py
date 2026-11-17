@@ -19,7 +19,7 @@ from rbergomi_nn.surface import MonteCarloConfig, SurfaceGrid
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) // 2))
+    parser.add_argument("--workers", type=int, default=os.cpu_count() // 2)
     parser.add_argument("--smoke", action="store_true", help="generate a tiny dataset")
     parser.add_argument("--output", type=Path, default=DATASET_PATH)
     args = parser.parse_args()

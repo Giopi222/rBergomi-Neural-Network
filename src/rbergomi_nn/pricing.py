@@ -1,8 +1,8 @@
-"""Monte Carlo estimators of European option prices under rough Bergomi.
+"""Monte Carlo estimators of European option prices under rough Bergomi, with S0 = 1.
 
 Two estimators are provided. Both price the out-of-the-money option at each
-strike (calls above the spot, puts below), which is what the implied
-volatility inversion needs.
+strike (calls for K >= 1, puts below), which is what the implied volatility
+inversion needs.
 
 ``standard_estimator``
     Averages the payoff of simulated terminal spots. Used for validation.
@@ -12,7 +12,7 @@ volatility inversion needs.
     (Romano-Touzi; "turbocharging" in McCrickerd-Pakkanen 2018). Given ``W``
     the spot is lognormal, so the orthogonal noise is integrated analytically::
 
-        price = E[ Black( S0 * exp(rho * I_T - rho^2 / 2 * V_T),  K,  sqrt((1 - rho^2) * V_T) ) ]
+        price = E[ Black( exp(rho * I_T - rho^2 / 2 * V_T),  K,  sqrt((1 - rho^2) * V_T) ) ]
         I_T = int_0^T sqrt(v) dW,     V_T = int_0^T v dt
 
     It needs no spot simulation, has much lower variance, and returns strictly
@@ -29,12 +29,12 @@ from rbergomi_nn.black_scholes import black_price
 from rbergomi_nn.simulator import DTYPE, VariancePaths
 
 
-@dataclass(frozen=True)
+@dataclass
 class PriceEstimate:
-    """Monte Carlo price and its standard error, one entry per (maturity, strike)."""
+    """Monte Carlo price and its standard error, shape ``(n_maturities, n_strikes)``."""
 
-    price: Tensor  # (n_maturities, n_strikes)
-    stderr: Tensor  # (n_maturities, n_strikes)
+    price: Tensor
+    stderr: Tensor
 
 
 def mean_and_stderr(samples: Tensor, antithetic: bool) -> tuple[Tensor, Tensor]:
@@ -44,10 +44,9 @@ def mean_and_stderr(samples: Tensor, antithetic: bool) -> tuple[Tensor, Tensor]:
     standard error is computed across pairs.
     """
     if antithetic:
-        half = samples.shape[0] // 2
+        half = len(samples) // 2
         samples = 0.5 * (samples[:half] + samples[half:])
-    stderr = samples.std(dim=0) / math.sqrt(samples.shape[0])
-    return samples.mean(dim=0), stderr
+    return samples.mean(dim=0), samples.std(dim=0) / math.sqrt(len(samples))
 
 
 def with_control_variate(samples: Tensor, control: Tensor, control_mean: float) -> Tensor:
@@ -57,79 +56,46 @@ def with_control_variate(samples: Tensor, control: Tensor, control_mean: float) 
     The slope is estimated per strike from the same paths, which adds a bias of
     order ``1 / n_paths``, negligible next to the statistical error.
     """
-    centred_control = control - control_mean
-    centred_samples = samples - samples.mean(dim=0)
-    covariance = (centred_samples * centred_control).mean(dim=0)
+    control = control - control_mean
+    covariance = ((samples - samples.mean(dim=0)) * control).mean(dim=0)
     # A constant control (rho = 0) carries no information: the clamp turns 0 / 0 into slope 0.
-    slope = covariance / centred_control.square().mean(dim=0).clamp_min(1e-300)
-    return samples - slope * centred_control
+    slope = covariance / control.square().mean(dim=0).clamp_min(1e-300)
+    return samples - slope * control
 
 
-def _as_strike_matrix(maturities: Tensor, strikes: Tensor) -> Tensor:
-    strikes = torch.as_tensor(strikes, dtype=DTYPE)
-    if strikes.ndim == 1:
-        strikes = strikes.expand(len(maturities), -1)
-    return strikes
-
-
-def mixed_estimator(
-    paths: VariancePaths,
-    rho: float | Tensor,
-    maturities: Tensor,
-    strikes: Tensor,
-    spot: float = 1.0,
-    control_variate: bool = True,
-) -> PriceEstimate:
+def mixed_estimator(paths: VariancePaths, rho, maturities, strikes, control_variate=True):
     """Conditional Monte Carlo price of out-of-the-money options.
 
     ``strikes`` has shape ``(n_maturities, n_strikes)``, or ``(n_strikes,)`` if
     every maturity uses the same strikes. With ``control_variate=True`` the
-    conditional forward, whose mean is known, is used as a control variate.
+    conditional forward, a martingale with mean 1, is used as a control variate.
     """
     rho = torch.as_tensor(rho, dtype=DTYPE)
-    strikes = _as_strike_matrix(maturities, strikes)
+    v = paths.variance[:, :-1]
+    integral_sqrt_v_dW = torch.cumsum(torch.sqrt(v) * paths.dW, dim=1)
+    integral_v_dt = torch.cumsum(v, dim=1) * paths.dt
 
-    v_left = paths.variance[:, :-1]
-    integral_sqrt_v_dW = torch.cumsum(torch.sqrt(v_left) * paths.dW, dim=1)
-    integral_v_dt = torch.cumsum(v_left, dim=1) * paths.dt
-
-    prices, stderrs = [], []
-    for maturity, strike_row in zip(maturities.tolist(), strikes, strict=True):
-        last_step = paths.step_index(maturity) - 1
+    results = []
+    for T, K in zip(maturities.tolist(), strikes.expand(len(maturities), -1)):
+        last_step = round(T / paths.dt) - 1
         I_T = integral_sqrt_v_dW[:, last_step, None]
         V_T = integral_v_dt[:, last_step, None]
 
-        conditional_forward = spot * torch.exp(rho * I_T - 0.5 * rho**2 * V_T)
-        conditional_std = torch.sqrt((1.0 - rho**2) * V_T)
-        conditional_price = black_price(
-            conditional_forward, strike_row, conditional_std, is_call=strike_row >= spot
-        )
+        forward = torch.exp(rho * I_T - 0.5 * rho**2 * V_T)
+        price = black_price(forward, K, torch.sqrt((1.0 - rho**2) * V_T), is_call=K >= 1.0)
         if control_variate:
-            # The conditional forward is a martingale: its mean is exactly the spot.
-            conditional_price = with_control_variate(conditional_price, conditional_forward, spot)
-        price, stderr = mean_and_stderr(conditional_price, paths.antithetic)
-        prices.append(price)
-        stderrs.append(stderr)
+            price = with_control_variate(price, forward, 1.0)
+        results.append(mean_and_stderr(price, paths.antithetic))
+    prices, stderrs = zip(*results)
     return PriceEstimate(torch.stack(prices), torch.stack(stderrs))
 
 
-def standard_estimator(
-    spot_paths: Tensor,
-    paths: VariancePaths,
-    maturities: Tensor,
-    strikes: Tensor,
-    spot: float = 1.0,
-) -> PriceEstimate:
+def standard_estimator(spot_paths: Tensor, paths: VariancePaths, maturities, strikes):
     """Plain Monte Carlo price of out-of-the-money options from simulated spots."""
-    strikes = _as_strike_matrix(maturities, strikes)
-
-    prices, stderrs = [], []
-    for maturity, strike_row in zip(maturities.tolist(), strikes, strict=True):
-        terminal_spot = spot_paths[:, paths.step_index(maturity), None]
-        call_payoff = (terminal_spot - strike_row).clamp_min(0.0)
-        put_payoff = (strike_row - terminal_spot).clamp_min(0.0)
-        payoff = torch.where(strike_row >= spot, call_payoff, put_payoff)
-        price, stderr = mean_and_stderr(payoff, paths.antithetic)
-        prices.append(price)
-        stderrs.append(stderr)
+    results = []
+    for T, K in zip(maturities.tolist(), strikes.expand(len(maturities), -1)):
+        S_T = spot_paths[:, round(T / paths.dt), None]
+        payoff = torch.where(K >= 1.0, S_T - K, K - S_T).clamp_min(0.0)
+        results.append(mean_and_stderr(payoff, paths.antithetic))
+    prices, stderrs = zip(*results)
     return PriceEstimate(torch.stack(prices), torch.stack(stderrs))

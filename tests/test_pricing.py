@@ -71,7 +71,7 @@ REFERENCE_PRICES = [
 
 @pytest.mark.parametrize("theta, strike, reference", REFERENCE_PRICES)
 def test_prices_match_literature(theta, strike, reference):
-    params = RBergomiParams.from_vector(theta)
+    params = RBergomiParams(*theta)
     generator = torch.Generator().manual_seed(0)
     paths = simulate_variance(params, n_steps=500, dt=1 / 500, n_paths=40_000, generator=generator)
     estimate = mixed_estimator(

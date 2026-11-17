@@ -14,6 +14,8 @@ MODEL_PATH = ROOT / "models" / "vol_surface_mlp.pt"
 REPORTS_DIR = ROOT / "reports"
 FIGURES_DIR = REPORTS_DIR / "figures"
 
+PARAMETER_LABELS = ("H", r"$\eta$", r"$\rho$", r"$\xi_0$")  # matplotlib labels of the parameters
+
 plt.rcParams.update(
     {
         "figure.dpi": 110,
@@ -28,18 +30,14 @@ plt.rcParams.update(
 )
 
 
-def save_figure(figure, name: str) -> Path:
-    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+def save_figure(figure, name: str):
     path = FIGURES_DIR / f"{name}.png"
     figure.savefig(path)
     plt.close(figure)
     print(f"saved {path.relative_to(ROOT)}")
-    return path
 
 
-def save_report(content: dict, name: str) -> Path:
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+def save_report(content: dict, name: str):
     path = REPORTS_DIR / f"{name}.json"
     path.write_text(json.dumps(content, indent=2))
     print(f"saved {path.relative_to(ROOT)}")
-    return path

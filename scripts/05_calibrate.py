@@ -19,59 +19,48 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 
-from rbergomi_nn.calibration import (
-    CalibrationResult,
-    Pricer,
-    calibrate,
-    monte_carlo_pricer,
-    network_pricer,
-)
+from rbergomi_nn.calibration import Pricer, calibrate, monte_carlo_pricer, network_pricer
 from rbergomi_nn.dataset import TRAIN_BOX, SurfaceDataset
 from rbergomi_nn.network import VolSurfaceMLP
-from rbergomi_nn.project import DATASET_PATH, MODEL_PATH, save_figure, save_report
+from rbergomi_nn.project import DATASET_PATH, MODEL_PATH, PARAMETER_LABELS, save_figure, save_report
 from rbergomi_nn.simulator import PARAMETER_NAMES
 
-PARAMETER_LABELS = ("H", r"$\eta$", r"$\rho$", r"$\xi_0$")
 NOISE_LEVELS_VOL_POINTS = (0.0, 0.1, 0.25, 0.5, 1.0)
 N_NOISE_SURFACES = 300
-BOX_WIDTH = TRAIN_BOX.upper_array - TRAIN_BOX.lower_array
 
 
-def calibrate_all(pricer: Pricer, targets: np.ndarray) -> tuple[list[CalibrationResult], float]:
+def calibrate_all(pricer, targets):
     """Calibrate to every row of ``targets``; also return the mean time per calibration."""
     start = time.perf_counter()
     results = [calibrate(pricer, target, TRAIN_BOX) for target in targets]
     return results, (time.perf_counter() - start) / len(targets)
 
 
-def recovery_summary(results: list[CalibrationResult], true_theta: np.ndarray) -> dict:
+def recovery_summary(results, true_theta):
     """How far the calibrated parameters are from the true ones."""
-    calibrated = np.array([result.theta for result in results])
-    absolute_error = np.abs(calibrated - true_theta)
+    absolute_error = np.abs(np.array([r.theta for r in results]) - true_theta)
+    at_bound = np.mean([r.at_bound.any() for r in results])
     summary = {
         "n_surfaces": len(results),
         "median_fit_rmse_vol_points": round(100 * float(np.median([r.rmse for r in results])), 4),
-        "fraction_with_a_parameter_at_bound": round(
-            float(np.mean([r.at_bound.any() for r in results])), 4
-        ),
+        "fraction_with_a_parameter_at_bound": round(float(at_bound), 4),
         "mean_surface_evaluations": round(float(np.mean([r.n_evaluations for r in results])), 1),
     }
     for index, name in enumerate(PARAMETER_NAMES):
+        median = np.median(absolute_error[:, index])
+        p95 = np.quantile(absolute_error[:, index], 0.95)
+        width = TRAIN_BOX.width[index]
         summary[name] = {
-            "median_abs_error": float(f"{np.median(absolute_error[:, index]):.3g}"),
-            "p95_abs_error": float(f"{np.quantile(absolute_error[:, index], 0.95):.3g}"),
+            "median_abs_error": float(f"{median:.3g}"),
+            "p95_abs_error": float(f"{p95:.3g}"),
             # Error as a share of the training range, comparable across parameters.
-            "median_error_pct_of_range": round(
-                100 * float(np.median(absolute_error[:, index]) / BOX_WIDTH[index]), 3
-            ),
-            "p95_error_pct_of_range": round(
-                100 * float(np.quantile(absolute_error[:, index], 0.95) / BOX_WIDTH[index]), 3
-            ),
+            "median_error_pct_of_range": round(100 * float(median / width), 3),
+            "p95_error_pct_of_range": round(100 * float(p95 / width), 3),
         }
     return summary
 
 
-def print_summary(title: str, summary: dict) -> None:
+def print_summary(title, summary):
     print(
         f"\n{title}  (n = {summary['n_surfaces']}, "
         f"fit RMSE {summary['median_fit_rmse_vol_points']} vol pts, "
@@ -86,12 +75,10 @@ def print_summary(title: str, summary: dict) -> None:
         )
 
 
-def plot_recovery(
-    results: list[CalibrationResult], true_theta: np.ndarray, name: str, title: str
-) -> None:
+def plot_recovery(results, true_theta, name, title):
     calibrated = np.array([result.theta for result in results])
     figure, axes = plt.subplots(1, 4, figsize=(14, 3.6))
-    for index, (axis, label) in enumerate(zip(axes, PARAMETER_LABELS, strict=True)):
+    for index, (axis, label) in enumerate(zip(axes, PARAMETER_LABELS)):
         low, high = TRAIN_BOX.lower[index], TRAIN_BOX.upper[index]
         axis.scatter(true_theta[:, index], calibrated[:, index], s=4, alpha=0.4)
         axis.plot([low, high], [low, high], "k-", lw=0.8)
@@ -100,16 +87,12 @@ def plot_recovery(
     save_figure(figure, name)
 
 
-def plot_noise_sweep(sweep: dict[float, dict]) -> None:
+def plot_noise_sweep(sweep):
     figure, axis = plt.subplots(figsize=(6.2, 4.2))
     levels = list(sweep)
-    for name, label in zip(PARAMETER_NAMES, PARAMETER_LABELS, strict=True):
-        axis.plot(
-            levels,
-            [sweep[level][name]["median_error_pct_of_range"] for level in levels],
-            "o-",
-            label=label,
-        )
+    for name, label in zip(PARAMETER_NAMES, PARAMETER_LABELS):
+        errors = [sweep[level][name]["median_error_pct_of_range"] for level in levels]
+        axis.plot(levels, errors, "o-", label=label)
     axis.set(
         title="Parameter recovery under noisy quotes",
         xlabel="noise added to each implied vol (vol points, std dev)",
@@ -119,23 +102,20 @@ def plot_noise_sweep(sweep: dict[float, dict]) -> None:
     save_figure(figure, "calibration_noise")
 
 
-def time_monte_carlo_calibration(
-    dataset: SurfaceDataset, target: np.ndarray, true_theta: np.ndarray
-) -> dict:
+def time_monte_carlo_calibration(dataset, target, true_theta):
     """One calibration with the simulator in the loop (finite-difference Jacobian)."""
     simulator = monte_carlo_pricer(dataset.grid, dataset.mc, seed=12_345)
     n_simulations = 0
 
-    def counted_surface(theta: np.ndarray) -> np.ndarray:
+    def counted_surface(theta):
         nonlocal n_simulations
         n_simulations += 1
         return simulator.surface(theta)
 
     start = time.perf_counter()
     result = calibrate(Pricer(counted_surface), target, TRAIN_BOX)
-    elapsed = time.perf_counter() - start
     return {
-        "seconds": round(elapsed, 1),
+        "seconds": round(time.perf_counter() - start, 1),
         "surfaces_simulated": n_simulations,
         "true_theta": true_theta.tolist(),
         "calibrated_theta": [float(f"{value:.5g}") for value in result.theta],
@@ -143,10 +123,9 @@ def time_monte_carlo_calibration(
     }
 
 
-def main() -> None:
+def main():
     dataset = SurfaceDataset.load(DATASET_PATH)
-    model = VolSurfaceMLP.load(MODEL_PATH)
-    pricer = network_pricer(model)
+    pricer = network_pricer(VolSurfaceMLP.load(MODEL_PATH))
     rng = np.random.default_rng(0)
     report = {}
 
@@ -170,13 +149,12 @@ def main() -> None:
     )
 
     # C. Monte Carlo targets plus quote noise.
-    subset = slice(0, N_NOISE_SURFACES)
+    targets = test.flat_implied_vol[:N_NOISE_SURFACES]
     sweep = {}
     for level in NOISE_LEVELS_VOL_POINTS:
-        targets = test.flat_implied_vol[subset]
         noisy_targets = targets + 0.01 * level * rng.standard_normal(targets.shape)
         results, _ = calibrate_all(pricer, noisy_targets)
-        sweep[level] = recovery_summary(results, test.theta[subset])
+        sweep[level] = recovery_summary(results, test.theta[:N_NOISE_SURFACES])
         print_summary(f"C. noise {level} vol pts", sweep[level])
     report["C_noisy_targets"] = {str(level): summary for level, summary in sweep.items()}
     plot_noise_sweep(sweep)
@@ -199,22 +177,18 @@ def main() -> None:
     # E. Timing against a Monte Carlo calibration of the first test surface.
     print("\nE. timing one Monte Carlo calibration ...")
     monte_carlo = time_monte_carlo_calibration(dataset, test.flat_implied_vol[0], test.theta[0])
-    network_first = calibrate(pricer, test.flat_implied_vol[0], TRAIN_BOX)
-    report["E_timing"] = {
+    network_theta = calibrate(pricer, test.flat_implied_vol[0], TRAIN_BOX).theta
+    report["E_timing"] = timing = {
         "network_milliseconds_per_calibration": round(1e3 * seconds_per_calibration, 2),
         "monte_carlo_calibration": monte_carlo,
-        "network_calibrated_theta_same_surface": [
-            float(f"{value:.5g}") for value in network_first.theta
-        ],
+        "network_calibrated_theta_same_surface": [float(f"{v:.5g}") for v in network_theta],
         "speedup": round(monte_carlo["seconds"] / seconds_per_calibration),
     }
     print(f"  network: {1e3 * seconds_per_calibration:.1f} ms per calibration")
-    print(
-        f"  Monte Carlo: {monte_carlo['seconds']} s  -> speed-up x{report['E_timing']['speedup']}"
-    )
+    print(f"  Monte Carlo: {monte_carlo['seconds']} s  -> speed-up x{timing['speedup']}")
     print(f"  true {test.theta[0]}")
     print(f"  MC   {monte_carlo['calibrated_theta']}")
-    print(f"  NN   {report['E_timing']['network_calibrated_theta_same_surface']}")
+    print(f"  NN   {timing['network_calibrated_theta_same_surface']}")
 
     save_report(report, "calibration")
 

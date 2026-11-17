@@ -25,15 +25,14 @@ def test_sobol_points_fill_the_box():
 def test_distance_outside_is_zero_inside_and_positive_outside():
     inside = TRAIN_BOX.centre
     outside = TRAIN_BOX.centre.copy()
-    half_width = 0.5 * (TRAIN_BOX.upper[0] - TRAIN_BOX.lower[0])
-    outside[0] = TRAIN_BOX.upper[0] + half_width
+    outside[0] = TRAIN_BOX.upper[0] + 0.5 * TRAIN_BOX.width[0]  # one half-width outside
     assert TRAIN_BOX.distance_outside(inside) == 0.0
     assert np.isclose(TRAIN_BOX.distance_outside(outside), 1.0)
 
 
 def test_training_box_is_strictly_inside_outer_box():
-    assert (OUTER_BOX.lower_array < TRAIN_BOX.lower_array).all()
-    assert (OUTER_BOX.upper_array > TRAIN_BOX.upper_array).all()
+    assert (OUTER_BOX.lower < TRAIN_BOX.lower).all()
+    assert (OUTER_BOX.upper > TRAIN_BOX.upper).all()
 
 
 def test_every_sample_has_exactly_one_valid_split():
