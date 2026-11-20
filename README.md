@@ -235,8 +235,8 @@ Jacobian that calibration depends on.
 
 ## References
 
-* C. Bayer, P. Friz, J. Gatheral (2016). *Pricing under rough volatility.* Quantitative Finance 16(6).
-* B. Horvath, A. Muguruza, M. Tomas (2021). *Deep learning volatility.* Quantitative Finance 21(1). arXiv:1901.09647.
-* M. Bennedsen, A. Lunde, M. Pakkanen (2017). *Hybrid scheme for Brownian semistationary processes.* Finance and Stochastics 21(4).
-* R. McCrickerd, M. Pakkanen (2018). *Turbocharging Monte Carlo pricing for the rough Bergomi model.* Quantitative Finance 18(11).
-* C. Bayer, C. Ben Hammouda, R. Tempone (2020). *Hierarchical adaptive sparse grids and quasi-Monte Carlo for option pricing under the rough Bergomi model.* Quantitative Finance 20(9). arXiv:1812.08533.
+* C. Bayer, P. Friz, J. Gatheral (2016). *Pricing under rough volatility.* 
+* B. Horvath, A. Muguruza, M. Tomas (2021). *Deep learning volatility.* 
+* M. Bennedsen, A. Lunde, M. Pakkanen (2017). *Hybrid scheme for Brownian semistationary processes.* 
+* R. McCrickerd, M. Pakkanen (2018). *Turbocharging Monte Carlo pricing for the rough Bergomi model.* 
+* C. Bayer, C. Ben Hammouda, R. Tempone (2020). *Hierarchical adaptive sparse grids and quasi-Monte Carlo for option pricing under the rough Bergomi model.* 
