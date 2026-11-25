@@ -228,11 +228,13 @@ reports/               figures and JSON results produced by the scripts
 models/                trained network
 ```
 
-## Next: differential machine learning
+## Next steps
 
-The simulator is already differentiable in `(H, η, ρ, ξ0)`. A future step will be about training the network on pathwise sensitivities as well as values (Huge and Savine 2020),
+Differential machine learning: the simulator is already differentiable in `(H, η, ρ, ξ0)`. A future step will be about training the network on pathwise sensitivities as well as values (Huge and Savine 2020),
 and testing whether that reduces the number of simulations needed and improves the
 Jacobian that calibration depends on.
+
+Real data: using real data to calibrate the model instead of synthetic data.
 
 ## References
 
