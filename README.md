@@ -5,8 +5,7 @@ but it has no closed-form prices: every surface costs a Monte Carlo simulation,
 and a calibration needs dozens of them. A neural network trained on simulated
 surfaces can replace the simulator and make calibration thousands of times faster.
 
-That part is known (Horvath, Muguruza, Tomas 2021). This project asks the
-question a model validation desk would ask next: **when can the network be
+This project asks the question a model validation desk would ask next: **when can the network be
 trusted?** The network is evaluated separately on parameters like those it was
 trained on, on a hole deliberately cut out of the training data, and on
 parameters outside the training range.
@@ -118,6 +117,8 @@ every implied volatility is stored next to it.
 ### 2. Network
 
 A fully connected network, 4 inputs (model parameters) -> 4 hidden layers of 64 units (SiLU, tanh is also a good choice to be infinitely differentiable) -> 80 implied volatilities; 18,000 weights. Inputs theta are scaled to [−1, 1], outputs standardised. Adam with learning-rate decay and early stopping. Tot. training time: 3 minutes on a laptop CPU.
+
+[Explore the network](docs/nn_explorer.ipynb)
 
 | | Time per surface | Speed-up |
 |---|---:|---:|
